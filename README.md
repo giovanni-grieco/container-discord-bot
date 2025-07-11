@@ -2,7 +2,7 @@
 
 This image allows an authorized user to control a docker daemon from the comfort of a Discord text channel.
 
-It allows (for now) to restart containers, see their logs and general status of containers.
+It allows (for now) to restart containers, see their logs and check their general status.
 
 ## compose.yml example
 ```yaml
