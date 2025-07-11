@@ -1,0 +1,12 @@
+services:
+  container-discord-bot:
+    image: henderson43/container-discord-bot:latest
+    container_name: container-discord-bot
+    restart: unless-stopped
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
+      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
+      - AUTHORIZED_USERS=${AUTHORIZED_USERS}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

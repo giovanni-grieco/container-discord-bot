@@ -1,0 +1,1 @@
+docker build -t henderson43/container-discord-bot:latest .

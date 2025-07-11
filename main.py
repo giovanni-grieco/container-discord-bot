@@ -12,16 +12,16 @@ logger = logging.getLogger(__name__)
 
 # Configurazione
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
-GUILD_ID = int(os.getenv('GUILD_ID', '0'))
-CHANNEL_ID = int(os.getenv('CHANNEL_ID', '0'))
+GUILD_ID = int(os.getenv('DISCORD_GUILD_ID', '0'))
+CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID', '0'))
 AUTHORIZED_USERS = os.getenv('AUTHORIZED_USERS', '').split(',')
 
 # Inizializza il client Docker
 try:
     docker_client = docker.from_env()
-    logger.info("Connesso al Docker daemon")
+    logger.info("Connected to docker daemon")
 except Exception as e:
-    logger.error(f"Errore connessione Docker: {e}")
+    logger.error(f"Docker connection error: {e}")
     exit(1)
 
 # Configura il bot
@@ -43,7 +43,7 @@ def get_container_by_name(name):
 def format_logs(logs, lines=50):
     """Formatta i log per Discord (max 2000 caratteri per messaggio)"""
     if not logs:
-        return ["Nessun log disponibile"]
+        return ["No logs available."]
     
     # Prendi solo le ultime righe
     log_lines = logs.strip().split('\n')
@@ -71,41 +71,41 @@ def format_logs(logs, lines=50):
 
 @bot.event
 async def on_ready():
-    logger.info(f'{bot.user} è connesso a Discord!')
+    logger.info(f'{bot.user} connected to Discord!')
     
     # Verifica la connessione al server e canale
     guild = bot.get_guild(GUILD_ID)
     if guild:
         channel = guild.get_channel(CHANNEL_ID)
         if channel:
-            await channel.send(f"🤖 Bot avviato! Connesso a Docker daemon.")
+            await channel.send(f"🤖 Container monitor bot started")
         else:
-            logger.warning(f"Canale {CHANNEL_ID} non trovato")
+            logger.warning(f"Channel {CHANNEL_ID} not found")
     else:
-        logger.warning(f"Server {GUILD_ID} non trovato")
+        logger.warning(f"Server {GUILD_ID} not found")
 
 @bot.command(name='logs')
 async def get_logs(ctx, container_name: str, lines: int = 50):
     """
-    Ottiene i log di un container
-    Uso: !logs <nome_container> [numero_righe]
+    Obtain logs from a container
+    Usage: !logs <container_name> [lines] (default: 50 lines, max: 2000 lines)
     """
     if not is_authorized(ctx.author.id):
-        await ctx.reply("❌ Non sei autorizzato ad usare questo comando.")
+        await ctx.reply("❌ Not authorized to use this command.")
         return
     
     if ctx.channel.id != CHANNEL_ID and CHANNEL_ID != 0:
-        await ctx.reply(f"❌ Questo comando può essere usato solo nel canale designato.")
+        await ctx.reply(f"❌ Cannot use this command in this channel.")
         return
     
     try:
         container = get_container_by_name(container_name)
         if not container:
-            await ctx.reply(f"❌ Container '{container_name}' non trovato.")
+            await ctx.reply(f"❌ Container '{container_name}' not found.")
             return
         
         # Invia messaggio di caricamento
-        loading_msg = await ctx.reply(f"📋 Recupero log di '{container_name}'...")
+        loading_msg = await ctx.reply(f"📋 Retrieving logs for '{container_name}'...")
         
         # Ottieni i log
         logs = container.logs(tail=lines, timestamps=True).decode('utf-8')
@@ -113,37 +113,37 @@ async def get_logs(ctx, container_name: str, lines: int = 50):
         # Formatta e invia i log
         log_chunks = format_logs(logs, lines)
         
-        await loading_msg.edit(content=f"📋 **Log di '{container_name}' (ultime {lines} righe):**")
+        await loading_msg.edit(content=f"📋 **'{container_name}' logs (last {lines} lines):**")
         
         for chunk in log_chunks:
             await ctx.send(chunk)
             
     except Exception as e:
-        logger.error(f"Errore nel recupero log: {e}")
-        await ctx.reply(f"❌ Errore nel recupero dei log: {str(e)}")
+        logger.error(f"Error retrieving logs: {e}")
+        await ctx.reply(f"❌ Error retrieving logs: {str(e)}")
 
 @bot.command(name='restart')
 async def restart_container(ctx, container_name: str):
     """
-    Riavvia un container
-    Uso: !restart <nome_container>
+    Restart container
+    Usage: !restart <container_name>
     """
     if not is_authorized(ctx.author.id):
-        await ctx.reply("❌ Non sei autorizzato ad usare questo comando.")
+        await ctx.reply("❌ Not authorized to use this command.")
         return
     
     if ctx.channel.id != CHANNEL_ID and CHANNEL_ID != 0:
-        await ctx.reply(f"❌ Questo comando può essere usato solo nel canale designato.")
+        await ctx.reply(f"❌ Cannot use this command in this channel.")
         return
     
     try:
         container = get_container_by_name(container_name)
         if not container:
-            await ctx.reply(f"❌ Container '{container_name}' non trovato.")
+            await ctx.reply(f"❌ Container '{container_name}' not found.")
             return
         
         # Invia messaggio di conferma
-        loading_msg = await ctx.reply(f"🔄 Riavvio del container '{container_name}' in corso...")
+        loading_msg = await ctx.reply(f"🔄 Restarting container '{container_name}'...")
         
         # Riavvia il container
         container.restart()
@@ -154,26 +154,26 @@ async def restart_container(ctx, container_name: str):
         
         status = container.status
         if status == 'running':
-            await loading_msg.edit(content=f"✅ Container '{container_name}' riavviato con successo!")
+            await loading_msg.edit(content=f"✅ Container '{container_name}' successfully restarted!")
         else:
-            await loading_msg.edit(content=f"⚠️ Container '{container_name}' riavviato ma status: {status}")
+            await loading_msg.edit(content=f"⚠️ Container '{container_name}' status: {status}")
             
     except Exception as e:
-        logger.error(f"Errore nel riavvio container: {e}")
-        await ctx.reply(f"❌ Errore nel riavvio del container: {str(e)}")
+        logger.error(f"Error while restarting container: {e}")
+        await ctx.reply(f"❌ Error while restarting container: {str(e)}")
 
 @bot.command(name='status')
 async def container_status(ctx, container_name: str = None):
     """
-    Mostra lo status dei container
-    Uso: !status [nome_container]
+    Shows the status of all containers or a specific one
+    Usage: !status [container_name]
     """
     if not is_authorized(ctx.author.id):
-        await ctx.reply("❌ Non sei autorizzato ad usare questo comando.")
+        await ctx.reply("❌ Not authorized to use this command.")
         return
     
     if ctx.channel.id != CHANNEL_ID and CHANNEL_ID != 0:
-        await ctx.reply(f"❌ Questo comando può essere usato solo nel canale designato.")
+        await ctx.reply(f"❌ Cannot use this command in this channel.")
         return
     
     try:
@@ -181,7 +181,7 @@ async def container_status(ctx, container_name: str = None):
             # Status di un container specifico
             container = get_container_by_name(container_name)
             if not container:
-                await ctx.reply(f"❌ Container '{container_name}' non trovato.")
+                await ctx.reply(f"❌ Container '{container_name}' not found.")
                 return
             
             container.reload()
@@ -193,10 +193,10 @@ async def container_status(ctx, container_name: str = None):
                 color=discord.Color.green() if status == 'running' else discord.Color.red()
             )
             embed.add_field(name="Status", value=status, inline=True)
-            embed.add_field(name="Creato", value=created, inline=True)
+            embed.add_field(name="Crated", value=created, inline=True)
             
             if status == 'running':
-                embed.add_field(name="Uptime", value="In esecuzione", inline=True)
+                embed.add_field(name="Uptime", value="running", inline=True)
             
             await ctx.reply(embed=embed)
         else:
@@ -204,7 +204,7 @@ async def container_status(ctx, container_name: str = None):
             containers = docker_client.containers.list(all=True)
             
             if not containers:
-                await ctx.reply("📋 Nessun container trovato.")
+                await ctx.reply("📋 No container found.")
                 return
             
             embed = discord.Embed(title="Status Container", color=discord.Color.blue())
@@ -222,50 +222,50 @@ async def container_status(ctx, container_name: str = None):
                     stopped.append(f"🔴 {name} ({status})")
             
             if running:
-                embed.add_field(name="In esecuzione", value="\n".join(running), inline=False)
+                embed.add_field(name="Running", value="\n".join(running), inline=False)
             if stopped:
-                embed.add_field(name="Fermati", value="\n".join(stopped), inline=False)
+                embed.add_field(name="Stopped", value="\n".join(stopped), inline=False)
             
             await ctx.reply(embed=embed)
             
     except Exception as e:
-        logger.error(f"Errore nel recupero status: {e}")
-        await ctx.reply(f"❌ Errore nel recupero dello status: {str(e)}")
+        logger.error(f"Error while retrieving status: {e}")
+        await ctx.reply(f"❌ Error while retrieving status: {str(e)}")
 
 @bot.command(name='help_container')
 async def help_container(ctx):
-    """Mostra l'aiuto per i comandi del bot"""
+    """Shows help message for container commands"""
     if not is_authorized(ctx.author.id):
-        await ctx.reply("❌ Non sei autorizzato ad usare questo comando.")
+        await ctx.reply("❌ Not authorized to use this command.")
         return
     
     embed = discord.Embed(
-        title="🤖 Comandi Bot Container",
-        description="Comandi disponibili per la gestione dei container Docker",
+        title="🤖 Bot Container commands",
+        description="Available command for managing Docker containers",
         color=discord.Color.blue()
     )
     
     embed.add_field(
-        name="!logs <container> [righe]",
-        value="Ottiene i log di un container (default: 50 righe)",
+        name="!logs <container> [max_lines]",
+        value="Obtain max_lines lines of logs from container  (default: 50 righe)",
         inline=False
     )
     
     embed.add_field(
         name="!restart <container>",
-        value="Riavvia un container",
+        value="Restart container",
         inline=False
     )
     
     embed.add_field(
         name="!status [container]",
-        value="Mostra lo status di un container specifico o di tutti",
+        value="Show status of all containers or a specific one",
         inline=False
     )
     
     embed.add_field(
         name="!help_container",
-        value="Mostra questo messaggio di aiuto",
+        value="Print help message for available commands",
         inline=False
     )
     
@@ -277,14 +277,14 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         return  # Ignora comandi non trovati
     elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.reply(f"❌ Argomento mancante. Usa `!help_container` per vedere la sintassi.")
+        await ctx.reply(f"❌ Missing argument. Use `!help_container` for the correct syntax.")
     else:
         logger.error(f"Errore comando: {error}")
-        await ctx.reply(f"❌ Si è verificato un errore: {str(error)}")
+        await ctx.reply(f"❌ An error occurred: {str(error)}")
 
 if __name__ == "__main__":
     if not DISCORD_TOKEN:
-        logger.error("DISCORD_TOKEN non configurato!")
+        logger.error("DISCORD_TOKEN not configured!")
         exit(1)
     
     bot.run(DISCORD_TOKEN)
