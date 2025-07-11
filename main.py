@@ -27,7 +27,7 @@ except Exception as e:
 # Configura il bot
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = commands.Bot(command_prefix='$', intents=intents)
 
 def is_authorized(user_id):
     """Verifica se l'utente è autorizzato ad eseguire comandi"""
