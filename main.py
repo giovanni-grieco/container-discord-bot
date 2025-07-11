@@ -88,7 +88,7 @@ async def on_ready():
 async def get_logs(ctx, container_name: str, lines: int = 50):
     """
     Obtain logs from a container
-    Usage: !logs <container_name> [lines] (default: 50 lines, max: 2000 lines)
+    Usage: $logs <container_name> [lines_count] (default: 50 lines, max: 2000 lines)
     """
     if not is_authorized(ctx.author.id):
         await ctx.reply("❌ Not authorized to use this command.")
@@ -126,7 +126,7 @@ async def get_logs(ctx, container_name: str, lines: int = 50):
 async def restart_container(ctx, container_name: str):
     """
     Restart container
-    Usage: !restart <container_name>
+    Usage: $restart <container_name>
     """
     if not is_authorized(ctx.author.id):
         await ctx.reply("❌ Not authorized to use this command.")
@@ -166,7 +166,7 @@ async def restart_container(ctx, container_name: str):
 async def container_status(ctx, container_name: str = None):
     """
     Shows the status of all containers or a specific one
-    Usage: !status [container_name]
+    Usage: $status [container_name]
     """
     if not is_authorized(ctx.author.id):
         await ctx.reply("❌ Not authorized to use this command.")
@@ -246,25 +246,25 @@ async def help_container(ctx):
     )
     
     embed.add_field(
-        name="!logs <container> [max_lines]",
-        value="Obtain max_lines lines of logs from container  (default: 50 righe)",
+        name="$logs <container> [lines_count]",
+        value="Obtain lines_count lines of logs from container  (default: 50 lines, max: 2000 lines)",
         inline=False
     )
     
     embed.add_field(
-        name="!restart <container>",
+        name="$restart <container>",
         value="Restart container",
         inline=False
     )
     
     embed.add_field(
-        name="!status [container]",
+        name="$status [container]",
         value="Show status of all containers or a specific one",
         inline=False
     )
     
     embed.add_field(
-        name="!help_container",
+        name="$help_container",
         value="Print help message for available commands",
         inline=False
     )
@@ -277,7 +277,7 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         return  # Ignora comandi non trovati
     elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.reply(f"❌ Missing argument. Use `!help_container` for the correct syntax.")
+        await ctx.reply(f"❌ Missing argument. Use `$help_container` for the correct syntax.")
     else:
         logger.error(f"Errore comando: {error}")
         await ctx.reply(f"❌ An error occurred: {str(error)}")
