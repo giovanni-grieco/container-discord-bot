@@ -1,0 +1,2 @@
+discord==2.3.2
+docker==7.1.0

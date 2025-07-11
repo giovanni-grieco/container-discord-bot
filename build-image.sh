@@ -1,0 +1,1 @@
+podman build -t container-discord-bot:latest .
