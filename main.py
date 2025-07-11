@@ -5,6 +5,8 @@ import os
 import asyncio
 from datetime import datetime
 import logging
+import queue
+import threading
 
 # Configurazione logging
 logging.basicConfig(level=logging.INFO)
@@ -15,6 +17,7 @@ DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD_ID = int(os.getenv('DISCORD_GUILD_ID', '0'))
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID', '0'))
 AUTHORIZED_USERS = os.getenv('AUTHORIZED_USERS', '').split(',')
+CONTAINER_EVENTS_ENABLED = os.getenv('CONTAINER_EVENTS_ENABLED', 'false').lower() in ['true', '1']
 
 # Inizializza il client Docker
 try:
@@ -69,6 +72,62 @@ def format_logs(logs, lines=50):
     
     return chunks
 
+container_event_task = None
+
+event_queue = queue.Queue()
+
+def docker_event_thread():
+    """Thread that monitors Docker events and puts them in a queue"""
+    try:
+        for event in docker_client.events(decode=True):
+            if CONTAINER_EVENTS_ENABLED and event['Type'] == 'container':
+                event_queue.put(event)
+    except Exception as e:
+        logger.error(f"Error in Docker events thread: {e}")
+
+async def container_event_worker(channel):
+    """Worker that processes events from the queue"""
+    # Start the Docker events thread
+    docker_thread = threading.Thread(target=docker_event_thread, daemon=True)
+    docker_thread.start()
+    
+    while True:
+        try:
+            # Check for events in the queue (non-blocking)
+            try:
+                event = event_queue.get_nowait()
+                
+                container_name = event['Actor']['Attributes'].get('name', 'unknown')
+                action = event['Action']
+                if action not in ['start', 'die']:
+                    continue  # Only process relevant actions
+                time = datetime.fromtimestamp(event['time']).strftime('%Y-%m-%d %H:%M:%S')
+                
+                message = f"🛠️ **Container Event**: `{container_name}` {action} at {time}"
+                
+                logger.info(message)
+                await channel.send(message)
+
+                if action == 'die':
+                    #collect last 25 lines of logs
+                    container = get_container_by_name(container_name)
+                    if container:
+                        logs = container.logs(tail=10, timestamps=True).decode('utf-8')
+                        log_chunks = format_logs(logs, lines=10)
+                        
+                        for chunk in log_chunks:
+                            await channel.send(chunk)
+                    else:
+                        await channel.send(f"❌ Container '{container_name}' not found for logs.")
+                
+            except queue.Empty:
+                # No events in queue, sleep a bit
+                await asyncio.sleep(0.5)
+                
+        except Exception as e:
+            logger.error(f"Error processing Docker events: {e}")
+            await asyncio.sleep(1)
+
 @bot.event
 async def on_ready():
     logger.info(f'{bot.user} connected to Discord!')
@@ -79,10 +138,30 @@ async def on_ready():
         channel = guild.get_channel(CHANNEL_ID)
         if channel:
             await channel.send(f"🤖 Container monitor bot started")
+            # Avvia il task per gli eventi dei container
+            container_event_task = asyncio.create_task(container_event_worker(channel))
+            await channel.send(f"🤖 Connected to Docker daemon and ready to monitor containers!")
         else:
             logger.warning(f"Channel {CHANNEL_ID} not found")
     else:
         logger.warning(f"Server {GUILD_ID} not found")
+
+@bot.command(name='toggle_notifications')
+async def toggle_notifications(ctx):
+    """
+    Toggle container event notifications
+    Usage: $toggle_notifications
+    """
+    if not is_authorized(ctx.author.id):
+        await ctx.reply("❌ Not authorized to use this command.")
+        return
+    
+    global CONTAINER_EVENTS_ENABLED
+    CONTAINER_EVENTS_ENABLED = not CONTAINER_EVENTS_ENABLED
+    
+    status = "enabled" if CONTAINER_EVENTS_ENABLED else "disabled"
+    logger.info(f"Container event notifications {status} by {ctx.author.name} ({ctx.author.id})")
+    await ctx.reply(f"🔔 Container event notifications are now {status}.")
 
 @bot.command(name='logs')
 async def get_logs(ctx, container_name: str, lines: int = 50):
