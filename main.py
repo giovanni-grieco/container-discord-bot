@@ -18,7 +18,14 @@ GUILD_ID = int(os.getenv('DISCORD_GUILD_ID', '0'))
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID', '0'))
 AUTHORIZED_USERS = os.getenv('AUTHORIZED_USERS', '').split(',')
 CONTAINER_EVENTS_ENABLED = os.getenv('CONTAINER_EVENTS_ENABLED', 'false').lower() in ['true', '1']
+MONITORED_CONTAINERS = os.getenv('MONITORED_CONTAINERS','')
 
+if MONITORED_CONTAINERS == '':
+    MONITORED_CONTAINERS = []
+else:
+    MONITORED_CONTAINERS = [c.strip() for c in MONITORED_CONTAINERS.split(',') if c.strip()]
+
+logger.info(f"MONITORED_CONTAINERS: {MONITORED_CONTAINERS}")
 # Inizializza il client Docker
 try:
     docker_client = docker.from_env()
@@ -129,7 +136,15 @@ async def container_event_worker(channel):
 #==========================
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix='$', intents=intents)
+bot = commands.Bot(command_prefix='$', intents=intents, help_command=None)
+
+def check_authorizations(ctx, container_name=None):
+    if not is_authorized(ctx.author.id):
+        raise Exception("You are not authorized to use this command.")
+    if ctx.channel.id != CHANNEL_ID and CHANNEL_ID != 0:
+        raise Exception(f"This command cannot be used in this channel.")
+    if container_name and MONITORED_CONTAINERS and container_name not in MONITORED_CONTAINERS:
+        raise Exception(f"Container '{container_name}' is not monitored by this bot.")
 
 @bot.event
 async def on_ready():
@@ -155,16 +170,18 @@ async def toggle_notifications(ctx):
     Toggle container event notifications
     Usage: $toggle_notifications
     """
-    if not is_authorized(ctx.author.id):
-        await ctx.reply("❌ Not authorized to use this command.")
-        return
-    
-    global CONTAINER_EVENTS_ENABLED
-    CONTAINER_EVENTS_ENABLED = not CONTAINER_EVENTS_ENABLED
-    
-    status = "enabled" if CONTAINER_EVENTS_ENABLED else "disabled"
-    logger.info(f"Container event notifications {status} by {ctx.author.name} ({ctx.author.id})")
-    await ctx.reply(f"🔔 Container event notifications are now {status}.")
+    try:
+        check_authorizations(ctx)
+        
+        global CONTAINER_EVENTS_ENABLED
+        CONTAINER_EVENTS_ENABLED = not CONTAINER_EVENTS_ENABLED
+        
+        status = "enabled" if CONTAINER_EVENTS_ENABLED else "disabled"
+        logger.info(f"Container event notifications {status} by {ctx.author.name} ({ctx.author.id})")
+        await ctx.reply(f"🔔 Container event notifications are now {status}.")
+    except Exception as e:
+        logger.error(f"Exception caught in toggle_notifications: {e}")
+        await ctx.reply(f"❌ Error: {str(e)}")
 
 @bot.command(name='logs')
 async def get_logs(ctx, container_name: str, lines: int = 50):
@@ -172,15 +189,10 @@ async def get_logs(ctx, container_name: str, lines: int = 50):
     Obtain logs from a container
     Usage: $logs <container_name> [lines_count] (default: 50 lines, max: 2000 lines)
     """
-    if not is_authorized(ctx.author.id):
-        await ctx.reply("❌ Not authorized to use this command.")
-        return
-    
-    if ctx.channel.id != CHANNEL_ID and CHANNEL_ID != 0:
-        await ctx.reply(f"❌ Cannot use this command in this channel.")
-        return
     
     try:
+        check_authorizations(ctx, container_name)
+
         container = get_container_by_name(container_name)
         if not container:
             await ctx.reply(f"❌ Container '{container_name}' not found.")
@@ -201,8 +213,8 @@ async def get_logs(ctx, container_name: str, lines: int = 50):
             await ctx.send(chunk)
             
     except Exception as e:
-        logger.error(f"Error retrieving logs: {e}")
-        await ctx.reply(f"❌ Error retrieving logs: {str(e)}")
+        logger.error(f"Exception caught in get_logs: {e}")
+        await ctx.reply(f"❌ Error: {str(e)}")
 
 @bot.command(name='restart')
 async def restart_container(ctx, container_name: str):
@@ -210,15 +222,9 @@ async def restart_container(ctx, container_name: str):
     Restart container
     Usage: $restart <container_name>
     """
-    if not is_authorized(ctx.author.id):
-        await ctx.reply("❌ Not authorized to use this command.")
-        return
-    
-    if ctx.channel.id != CHANNEL_ID and CHANNEL_ID != 0:
-        await ctx.reply(f"❌ Cannot use this command in this channel.")
-        return
     
     try:
+        check_authorizations(ctx, container_name)
         container = get_container_by_name(container_name)
         if not container:
             await ctx.reply(f"❌ Container '{container_name}' not found.")
@@ -241,8 +247,8 @@ async def restart_container(ctx, container_name: str):
             await loading_msg.edit(content=f"⚠️ Container '{container_name}' status: {status}")
             
     except Exception as e:
-        logger.error(f"Error while restarting container: {e}")
-        await ctx.reply(f"❌ Error while restarting container: {str(e)}")
+        logger.error(f"Exception caught in restart_container: {e}")
+        await ctx.reply(f"❌ Error: {str(e)}")
 
 @bot.command(name='status')
 async def container_status(ctx, container_name: str = None):
@@ -250,15 +256,9 @@ async def container_status(ctx, container_name: str = None):
     Shows the status of all containers or a specific one
     Usage: $status [container_name]
     """
-    if not is_authorized(ctx.author.id):
-        await ctx.reply("❌ Not authorized to use this command.")
-        return
-    
-    if ctx.channel.id != CHANNEL_ID and CHANNEL_ID != 0:
-        await ctx.reply(f"❌ Cannot use this command in this channel.")
-        return
-    
+
     try:
+        check_authorizations(ctx, container_name)
         if container_name:
             # Status di un container specifico
             container = get_container_by_name(container_name)
@@ -269,21 +269,30 @@ async def container_status(ctx, container_name: str = None):
             container.reload()
             status = container.status
             created = container.attrs['Created'][:19]  # Prendi solo data e ora
-            
             embed = discord.Embed(
                 title=f"Status Container: {container_name}",
                 color=discord.Color.green() if status == 'running' else discord.Color.red()
             )
             embed.add_field(name="Status", value=status, inline=True)
-            embed.add_field(name="Crated", value=created, inline=True)
-            
-            if status == 'running':
-                embed.add_field(name="Uptime", value="running", inline=True)
+            embed.add_field(name="Created", value=created, inline=True)
             
             await ctx.reply(embed=embed)
         else:
             # Status di tutti i container
-            containers = docker_client.containers.list(all=True)
+            containers = []
+            if MONITORED_CONTAINERS:
+                for container_name in MONITORED_CONTAINERS:
+                    logger.info(f"Checking status for container: {container_name}")
+                    container = get_container_by_name(container_name)
+                    if not container:
+                        logger.warning(f"Container '{container_name}' not found")
+                        continue
+                    if container:
+                        container.reload()
+                        containers.append(container)
+            else:
+                containers = docker_client.containers.list(all=True)
+                
             
             if not containers:
                 await ctx.reply("📋 No container found.")
@@ -311,47 +320,33 @@ async def container_status(ctx, container_name: str = None):
             await ctx.reply(embed=embed)
             
     except Exception as e:
-        logger.error(f"Error while retrieving status: {e}")
-        await ctx.reply(f"❌ Error while retrieving status: {str(e)}")
+        logger.error(f"Exception caught in container_status: {e}")
+        await ctx.reply(f"❌ Error: {str(e)}")
 
-@bot.command(name='help_container')
-async def help_container(ctx):
-    """Shows help message for container commands"""
-    if not is_authorized(ctx.author.id):
-        await ctx.reply("❌ Not authorized to use this command.")
-        return
+@bot.command(name='help')
+async def help_command(ctx):
+    """
+    Shows the help message with available commands
+    Usage: $help
+    """
+
+    try:
+        check_authorizations(ctx)
     
-    embed = discord.Embed(
-        title="🤖 Bot Container commands",
-        description="Available command for managing Docker containers",
-        color=discord.Color.blue()
-    )
-    
-    embed.add_field(
-        name="$logs <container> [lines_count]",
-        value="Obtain lines_count lines of logs from container  (default: 50 lines, max: 2000 lines)",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="$restart <container>",
-        value="Restart container",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="$status [container]",
-        value="Show status of all containers or a specific one",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="$help_container",
-        value="Print help message for available commands",
-        inline=False
-    )
-    
-    await ctx.reply(embed=embed)
+        help_text = (
+            "🤖 **Container Monitor Bot Help**\n\n"
+            "Available commands:\n"
+            "`$status [container_name]` - Show status of all containers or a specific one.\n"
+            "`$logs <container_name> [lines_count]` - Get logs from a container (default: 50 lines).\n"
+            "`$restart <container_name>` - Restart a specific container.\n"
+            "`$toggle_notifications` - Enable/disable container event notifications.\n"
+            "`$help` - Show this help message."
+        )
+        
+        await ctx.reply(help_text)
+    except Exception as e:
+        logger.error(f"Exception caught in help_command: {e}")
+        await ctx.reply(f"❌ Error: {str(e)}")
 
 # Gestione errori
 @bot.event
@@ -359,10 +354,10 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         return  # Ignora comandi non trovati
     elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.reply(f"❌ Missing argument. Use `$help_container` for the correct syntax.")
+        await ctx.reply(f"❌ Missing argument. Use `$help` for the correct syntax.")
     else:
-        logger.error(f"Errore comando: {error}")
-        await ctx.reply(f"❌ An error occurred: {str(error)}")
+        logger.error(f"Error caught by on_command_error: {error}")
+        await ctx.reply(f"❌ Error: {str(error)}")
 
 if __name__ == "__main__":
     if not DISCORD_TOKEN:

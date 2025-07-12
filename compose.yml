@@ -8,6 +8,7 @@ services:
       - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
       - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
       - AUTHORIZED_USERS=${AUTHORIZED_USERS}
+      - MONITORED_CONTAINERS=
       - CONTAINER_EVENTS_ENABLED=true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
