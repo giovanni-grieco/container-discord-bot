@@ -27,11 +27,6 @@ except Exception as e:
     logger.error(f"Docker connection error: {e}")
     exit(1)
 
-# Configura il bot
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix='$', intents=intents)
-
 def is_authorized(user_id):
     """Verifica se l'utente è autorizzato ad eseguire comandi"""
     return str(user_id) in AUTHORIZED_USERS or not AUTHORIZED_USERS
@@ -127,6 +122,14 @@ async def container_event_worker(channel):
         except Exception as e:
             logger.error(f"Error processing Docker events: {e}")
             await asyncio.sleep(1)
+
+
+#==========================
+# DISCORD bot configuration
+#==========================
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix='$', intents=intents)
 
 @bot.event
 async def on_ready():
