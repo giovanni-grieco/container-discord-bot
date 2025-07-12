@@ -39,5 +39,5 @@ The bot uses a '$' prefix for its commands
 - $logs {container} [lines_count] - Obtain lines_count lines of logs from container (default: 50 lines, max: 2000 lines)
 - $restart {container} - Restart container
 - $status [container] - Show status of all containers or a specific one
-- $help_container - Print help message for available commands
 - $toggle_notifications - Turns on/off notifications systems for docker events (kill, start, die)
+- $help - Prints the command list with a short summary of their purpose
