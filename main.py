@@ -141,6 +141,18 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='$', intents=intents, help_command=None)
 
+def check_user_authorization(user_id):
+    if not is_authorized(user_id):
+        raise Exception("You are not authorized to use this command.")
+
+def check_discord_channel_authorization(channel_id):
+    if channel_id != CHANNEL_ID and CHANNEL_ID != 0:
+        raise Exception(f"This command cannot be used in this channel.")
+
+def check_container_authorization(container_name):
+    if MONITORED_CONTAINERS and container_name not in MONITORED_CONTAINERS:
+        raise Exception(f"Container '{container_name}' is not monitored by this bot.")
+
 def check_authorizations(ctx, container_name=None):
     if not is_authorized(ctx.author.id):
         raise Exception("You are not authorized to use this command.")
@@ -190,7 +202,8 @@ async def toggle_notifications(ctx):
 
     logger.info(f"Toggle notifications command invoked by {ctx.author.name} ({ctx.author.id})")
     try:
-        check_authorizations(ctx)
+        check_user_authorization(ctx.author.id)
+        check_discord_channel_authorization(ctx.channel.id)
         
         global CONTAINER_EVENTS_ENABLED
         CONTAINER_EVENTS_ENABLED = not CONTAINER_EVENTS_ENABLED
@@ -210,8 +223,8 @@ async def get_logs(ctx, container_name: str, lines: int = 50):
     """
     logger.info(f"Logs command invoked by {ctx.author.name} ({ctx.author.id}) for container '{container_name}' with {lines} lines")
     try:
-        check_authorizations(ctx, container_name)
-
+        check_user_authorization(ctx.author.id)
+        check_discord_channel_authorization(ctx.channel.id)
         container = get_container_by_name(container_name)
         if not container:
             await ctx.reply(f"❌ Container '{container_name}' not found.")
@@ -219,7 +232,7 @@ async def get_logs(ctx, container_name: str, lines: int = 50):
             if suggestions and len(suggestions) > 0:
                 await ctx.reply(f"Did you mean: {suggestions[0]}?")
             return
-        
+        check_container_authorization(container_name)
         # Invia messaggio di caricamento
         loading_msg = await ctx.reply(f"📋 Retrieving logs for '{container_name}'...")
         
@@ -248,7 +261,8 @@ async def restart_container(ctx, container_name: str):
     logger.info(f"Restart command invoked by {ctx.author.name} ({ctx.author.id}) for container '{container_name}'")
     
     try:
-        check_authorizations(ctx, container_name)
+        check_user_authorization(ctx.author.id)
+        check_discord_channel_authorization(ctx.channel.id)
         container = get_container_by_name(container_name)
         if not container:
             await ctx.reply(f"❌ Container '{container_name}' not found.")
@@ -256,7 +270,7 @@ async def restart_container(ctx, container_name: str):
             if suggestions and len(suggestions) > 0:
                 await ctx.reply(f"Did you mean: {suggestions[0]}?")
             return
-        
+        check_container_authorization(container_name)
         # Invia messaggio di conferma
         loading_msg = await ctx.reply(f"🔄 Restarting container '{container_name}'...")
         
@@ -285,7 +299,8 @@ async def container_status(ctx, container_name: str = None):
     """
     logger.info(f"Status command invoked by {ctx.author.name} ({ctx.author.id}) for container '{container_name if container_name else 'all'}'")
     try:
-        check_authorizations(ctx, container_name)
+        check_user_authorization(ctx.author.id)
+        check_discord_channel_authorization(ctx.channel.id)
         if container_name:
             # Status di un container specifico
             container = get_container_by_name(container_name)
@@ -295,7 +310,7 @@ async def container_status(ctx, container_name: str = None):
                 if suggestions and len(suggestions) > 0:
                     await ctx.reply(f"Did you mean: {suggestions[0]}?")
                 return
-            
+            check_container_authorization(container_name)
             container.reload()
             status = container.status
             created = container.attrs['Created'][:19]  # Prendi solo data e ora
@@ -361,7 +376,8 @@ async def help_command(ctx):
     """
     logger.info(f"Help command invoked by {ctx.author.name} ({ctx.author.id})")
     try:
-        check_authorizations(ctx)
+        check_user_authorization(ctx.author.id)
+        check_discord_channel_authorization(ctx.channel.id)
     
         help_text = (
             "🤖 **Container Monitor Bot Help**\n\n"
