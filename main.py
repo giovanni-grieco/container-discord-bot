@@ -7,6 +7,7 @@ from datetime import datetime
 import logging
 import queue
 import threading
+from difflib import get_close_matches
 
 # Configurazione logging
 logging.basicConfig(level=logging.INFO)
@@ -148,6 +149,16 @@ def check_authorizations(ctx, container_name=None):
     if container_name and MONITORED_CONTAINERS and container_name not in MONITORED_CONTAINERS:
         raise Exception(f"Container '{container_name}' is not monitored by this bot.")
 
+def offer_suggestion(ctx, container_name=None):
+    # Get all available containers, filter through to leave only monitored ones if monitored list is set
+    # Rank by similarity to the provided container_name
+    all_containers = docker_client.containers.list(all=True)
+    if MONITORED_CONTAINERS:
+        all_containers = [c for c in all_containers if c.name in MONITORED_CONTAINERS]
+    container_names = [c.name for c in all_containers]
+    suggestions = get_close_matches(container_name, container_names, n=3, cutoff=0.5)
+    return suggestions
+
 @bot.event
 async def on_ready():
     logger.info(f'{bot.user} connected to Discord!')
@@ -198,6 +209,9 @@ async def get_logs(ctx, container_name: str, lines: int = 50):
         container = get_container_by_name(container_name)
         if not container:
             await ctx.reply(f"❌ Container '{container_name}' not found.")
+            suggestions = offer_suggestion(ctx, container_name)
+            if suggestions and len(suggestions) > 0:
+                await ctx.reply(f"Did you mean: {suggestions[0]}?")
             return
         
         # Invia messaggio di caricamento
@@ -230,6 +244,9 @@ async def restart_container(ctx, container_name: str):
         container = get_container_by_name(container_name)
         if not container:
             await ctx.reply(f"❌ Container '{container_name}' not found.")
+            suggestions = offer_suggestion(ctx, container_name)
+            if suggestions and len(suggestions) > 0:
+                await ctx.reply(f"Did you mean: {suggestions[0]}?")
             return
         
         # Invia messaggio di conferma
@@ -266,6 +283,9 @@ async def container_status(ctx, container_name: str = None):
             container = get_container_by_name(container_name)
             if not container:
                 await ctx.reply(f"❌ Container '{container_name}' not found.")
+                suggestions = offer_suggestion(ctx, container_name)
+                if suggestions and len(suggestions) > 0:
+                    await ctx.reply(f"Did you mean: {suggestions[0]}?")
                 return
             
             container.reload()
