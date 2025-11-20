@@ -158,6 +158,7 @@ def offer_suggestion(container_name=None):
         all_containers = [c for c in all_containers if c.name in MONITORED_CONTAINERS]
         logger.info(f"Filtered containers: {[c.name for c in all_containers]}")
     container_names = [c.name for c in all_containers]
+    logger.info(f"Container names for suggestions: {container_names}")
     suggestions = get_close_matches(container_name, container_names, n=3, cutoff=0.5)
     logger.info(f"Suggestions for '{container_name}': {suggestions}")
     return suggestions
