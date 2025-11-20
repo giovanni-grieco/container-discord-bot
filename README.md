@@ -16,7 +16,8 @@ services:
       - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
       - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
       - AUTHORIZED_USERS=${AUTHORIZED_USERS}
-      - CONTAINER_NOTIFICATIONS_ENABLED=true
+      - CONTAINER_NOTIFICATIONS_ENABLED=true #Or false
+      - MONITORED_CONTAINERS=container-name1, container-name2,...,container-nameN #or empty
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 ```
@@ -25,8 +26,8 @@ services:
 DISCORD_TOKEN="your_discord_bot_token" #string
 DISCORD_GUILD_ID=your_server_id #int
 DISCORD_CHANNEL_ID=your_channel_id #int
-AUTHORIZED_USERS=user_id1,user_id2,user_id3,...,user_idN #[int]
-CONTAINER_NOTIFICATIONS_ENABLED= flag #bool
+AUTHORIZED_USERS=user_id1,user_id2,user_id3,...,user_idN #[int] or empty
+CONTAINER_NOTIFICATIONS_ENABLED=flag #bool
 
 ```
 
