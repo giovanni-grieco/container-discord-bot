@@ -100,6 +100,8 @@ async def container_event_worker(channel):
                 event = event_queue.get_nowait()
                 
                 container_name = event['Actor']['Attributes'].get('name', 'unknown')
+                if MONITORED_CONTAINERS and container_name not in MONITORED_CONTAINERS:
+                    continue  # Skip non-monitored containers
                 action = event['Action']
                 if action not in ['start', 'die']:
                     continue  # Only process relevant actions
