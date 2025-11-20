@@ -153,13 +153,13 @@ def offer_suggestion(container_name=None):
     # Get all available containers, filter through to leave only monitored ones if monitored list is set
     # Rank by similarity to the provided container_name
     all_containers = docker_client.containers.list(all=True)
-    print(f"All containers: {[c.name for c in all_containers]}")
+    logger.info(f"All containers: {[c.name for c in all_containers]}")
     if MONITORED_CONTAINERS:
         all_containers = [c for c in all_containers if c.name in MONITORED_CONTAINERS]
-        print(f"Filtered containers: {[c.name for c in all_containers]}")
+        logger.info(f"Filtered containers: {[c.name for c in all_containers]}")
     container_names = [c.name for c in all_containers]
     suggestions = get_close_matches(container_name, container_names, n=3, cutoff=0.5)
-    print(f"Suggestions for '{container_name}': {suggestions}")
+    logger.info(f"Suggestions for '{container_name}': {suggestions}")
     return suggestions
 
 @bot.event
