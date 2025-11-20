@@ -186,6 +186,8 @@ async def toggle_notifications(ctx):
     Toggle container event notifications
     Usage: $toggle_notifications
     """
+
+    logger.info(f"Toggle notifications command invoked by {ctx.author.name} ({ctx.author.id})")
     try:
         check_authorizations(ctx)
         
@@ -205,7 +207,7 @@ async def get_logs(ctx, container_name: str, lines: int = 50):
     Obtain logs from a container
     Usage: $logs <container_name> [lines_count] (default: 50 lines, max: 2000 lines)
     """
-    
+    logger.info(f"Logs command invoked by {ctx.author.name} ({ctx.author.id}) for container '{container_name}' with {lines} lines")
     try:
         check_authorizations(ctx, container_name)
 
@@ -241,6 +243,8 @@ async def restart_container(ctx, container_name: str):
     Restart container
     Usage: $restart <container_name>
     """
+
+    logger.info(f"Restart command invoked by {ctx.author.name} ({ctx.author.id}) for container '{container_name}'")
     
     try:
         check_authorizations(ctx, container_name)
@@ -278,7 +282,7 @@ async def container_status(ctx, container_name: str = None):
     Shows the status of all containers or a specific one
     Usage: $status [container_name]
     """
-
+    logger.info(f"Status command invoked by {ctx.author.name} ({ctx.author.id}) for container '{container_name if container_name else 'all'}'")
     try:
         check_authorizations(ctx, container_name)
         if container_name:
@@ -354,7 +358,7 @@ async def help_command(ctx):
     Shows the help message with available commands
     Usage: $help
     """
-
+    logger.info(f"Help command invoked by {ctx.author.name} ({ctx.author.id})")
     try:
         check_authorizations(ctx)
     
