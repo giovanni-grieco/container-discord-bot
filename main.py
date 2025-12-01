@@ -7,6 +7,7 @@ from datetime import datetime
 import logging
 import queue
 import threading
+import io
 
 # Configurazione logging
 logging.basicConfig(level=logging.INFO)
@@ -43,34 +44,15 @@ def get_container_by_name(name):
     except docker.errors.NotFound:
         return None
 
-def format_logs(logs, lines=50):
-    """Formatta i log per Discord (max 2000 caratteri per messaggio)"""
+def create_log_file(logs: str, filename_base: str):
+    """Create a single discord.File from logs (plain text) named <base>_YYYYMMDD_HHMMSS.log"""
     if not logs:
-        return ["No logs available."]
-    
-    # Prendi solo le ultime righe
-    log_lines = logs.strip().split('\n')
-    if len(log_lines) > lines:
-        log_lines = log_lines[-lines:]
-    
-    # Dividi in chunk per rispettare il limite di Discord
-    chunks = []
-    current_chunk = "```\n"
-    
-    for line in log_lines:
-        # Se aggiungere questa riga supera il limite, inizia un nuovo chunk
-        if len(current_chunk) + len(line) + 10 > 1990:  # 10 caratteri di margine
-            current_chunk += "```"
-            chunks.append(current_chunk)
-            current_chunk = "```\n"
-        
-        current_chunk += line + "\n"
-    
-    if current_chunk != "```\n":
-        current_chunk += "```"
-        chunks.append(current_chunk)
-    
-    return chunks
+        logs = "No logs available.\n"
+    bio = io.BytesIO(logs.encode('utf-8'))
+    bio.seek(0)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"{filename_base}_{timestamp}.log"
+    return discord.File(fp=bio, filename=filename)
 
 container_event_task = None
 
@@ -109,14 +91,12 @@ async def container_event_worker(channel):
                 await channel.send(message)
 
                 if action == 'die':
-                    #collect last 25 lines of logs
+                    # collect last lines of logs and send as a single .log attachment
                     container = get_container_by_name(container_name)
                     if container:
-                        logs = container.logs(tail=10, timestamps=True).decode('utf-8')
-                        log_chunks = format_logs(logs, lines=10)
-                        
-                        for chunk in log_chunks:
-                            await channel.send(chunk)
+                        logs = container.logs(tail=25, timestamps=True).decode('utf-8')
+                        file = create_log_file(logs, container_name)
+                        await channel.send(file=file)
                     else:
                         await channel.send(f"❌ Container '{container_name}' not found for logs.")
                 
@@ -167,7 +147,7 @@ async def toggle_notifications(ctx):
 async def get_logs(ctx, container_name: str, lines: int = 50):
     """
     Obtain logs from a container
-    Usage: $logs <container_name> [lines_count] (default: 50 lines, max: 2000 lines)
+    Usage: $logs <container_name> [lines_count] (default: 50 lines)
     """
     if not is_authorized(ctx.author.id):
         await ctx.reply("❌ Not authorized to use this command.")
@@ -189,17 +169,16 @@ async def get_logs(ctx, container_name: str, lines: int = 50):
         # Ottieni i log
         logs = container.logs(tail=lines, timestamps=True).decode('utf-8')
         
-        # Formatta e invia i log
-        log_chunks = format_logs(logs, lines)
+        # Create single .log attachment and send
+        file = create_log_file(logs, container_name)
         
         await loading_msg.edit(content=f"📋 **'{container_name}' logs (last {lines} lines):**")
-        
-        for chunk in log_chunks:
-            await ctx.send(chunk)
+        await ctx.send(file=file)
             
     except Exception as e:
         logger.error(f"Error retrieving logs: {e}")
         await ctx.reply(f"❌ Error retrieving logs: {str(e)}")
+
 
 @bot.command(name='restart')
 async def restart_container(ctx, container_name: str):
